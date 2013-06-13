@@ -55,6 +55,7 @@
 			}
 
 			function gotLocation(p){
+				$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + AppMobi.device.uuid + '&lat=' + p.coords.latitude + '&lng=' + p.coords.longitude);
 				var newLL = new google.maps.LatLng(p.coords.latitude, p.coords.longitude);
 				if (uMarker === null) {
 					map.panTo(newLL);
@@ -73,22 +74,27 @@
 			}
 
 			function getUserLocation(){
-				$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php', function(data){
-					var newLL = new google.maps.LatLng(data.lat, data.lng);
-					var mybounds = new google.maps.LatLngBounds();
-					mybounds.extend(newLL);
-					mybounds.extend(myMarker.getPosition());
-					if (uMarker === null) {
-						uMarker = new google.maps.Marker({
-							position: newLL,
-							map: map,
-							title: 'user current location'
-						});
-					} else {
-						uMarker.setPosition(newLL);
-					}
-					map.fitBounds(mybounds);
-				});
+				var uuid = AppMobi.cache.getCookie('uuid');
+				if (typeof uuid !== 'undefined') {
+					$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + uuid, function(data){
+						var newLL = new google.maps.LatLng(data.lat, data.lng);
+						var mybounds = new google.maps.LatLngBounds();
+						mybounds.extend(newLL);
+						mybounds.extend(myMarker.getPosition());
+						if (uMarker === null) {
+							uMarker = new google.maps.Marker({
+								position: newLL,
+								map: map,
+								title: 'user current location'
+							});
+						} else {
+							uMarker.setPosition(newLL);
+						}
+						map.fitBounds(mybounds);
+					});
+				} else {
+					alert('Scan a QR Code first.');
+				}
 			}
 
 			var map;
@@ -112,7 +118,8 @@
 			document.addEventListener("appMobi.device.barcode.scan", gotQRCode, false);
 			function gotQRCode(e){
 				if (e.success === true){
-					alert(e.codedata);
+					AppMobi.cache.setCookie('uuid', e.codedata, -1);
+					alert('Saved uuid.');
 				}
 			}
 		</script>
@@ -131,7 +138,6 @@
 					<script>
 						function getQRCode(){
 							$.ui.addContentDiv("myDiv","<img src='http://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=" + AppMobi.device.uuid + "' />","Title");
-							//$.ui.loadContent('http://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=' + AppMobi.device.uuid,false,false,'up');
 							$.ui.loadContent('myDiv',false,true,'up');
 						}
 					</script>
