@@ -39,8 +39,6 @@
 				AppMobi.device.setAutoRotate(false);
 				AppMobi.device.hideSplashScreen();
 				$.ui.launch();
-				$.ui.toggleHeaderMenu();
-				$.ui.updateNavbarElements($('#footer_start').html());
 				initMap();
 				setInterval('getLocation()', 10000); //Get my location every 30 seconds
 				AppMobi.geolocation.getCurrentPosition(gotLocation, noLocation);
@@ -77,16 +75,13 @@
 			}
 
 			function getUserLocation(){
-				console.log('getUserLocation');
 				var uuid = AppMobi.cache.getCookie('uuid');
 				if (typeof uuid !== 'undefined') {
 					var d = new Date();
 					var t = d.getTime();
 					if (lastUGeo === null || t - lastUGeo > 30) {
 						lastUGeo = t;
-						console.log('getting it ' + uuid);
 						$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + uuid, function(data){
-							console.log(data);
 							var newLL = new google.maps.LatLng(data.lat, data.lng);
 							var mybounds = new google.maps.LatLngBounds();
 							mybounds.extend(newLL);
@@ -131,19 +126,22 @@
 				if (e.success === true){
 					AppMobi.cache.setCookie('uuid', e.codedata, -1);
 					alert('Saved uuid.');
+					$.ui.loadContent('#main', false, true);
 				}
 			}
 
 			var uTrackInt = null;
 			function startTracking(){
-				$.ui.updateNavbarElements($('#footer_stop').html());
 				uTrackInt = setInterval('getUserLocation()', 10000);
 			}
 
 			function stopTracking(){
-				$.ui.updateNavbarElements($('#footer_start').html());
 				clearInterval(uTrackInt);
 				uTrackInt = null;
+			}
+
+			function hideHeader(){
+				$.ui.toggleHeaderMenu(false);
 			}
 		</script>
 	</head>
@@ -153,33 +151,35 @@
 				<span class='ui-icon ui-icon-loading spin'></span><h1 >Starting app</h1>
 			</div>
 			<div id="content">
-				<div id='main' class='panel' style="width: 100%; height: 100%">
+				<div id='main' class='panel' data-tab="map" data-load="hideHeader" style="width: 100%; height: 100%; overflow: hidden;" selected="true">
 					<div style="width: 100%; height: 100%;" id="map-canvas"></div>
 				</div>
-				<div id='info' class='panel'>
-					<br />
-					<script>
-						function getQRCode(){
-							$.ui.addContentDiv("myDiv","<img src='http://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=" + AppMobi.device.uuid + "' />","Title");
-							$.ui.loadContent('myDiv',false,true,'up');
+				<div id="settings" class="panel" data-load="hideHeader">
+					<ul>
+						<li>
+							<a href='#qrcode'>My QR Code</a>
+						</li>
+						<li>
+							<a href='#' onclick="scanQRCode()">Scan QR Code</a>
+						</li>
+					</ul>
+				</div>
+				<script>
+					function loadQRImg(){
+						hideHeader();
+						if ($('#qrcodeimg').html() === "") {
+							$('#qrcodeimg').html("<a href='#' onclick='$.ui.loadContent(\"#settings\", false, true);'><img src='http://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=" + AppMobi.device.uuid + "' /></a>");
 						}
-					</script>
+					};
+				</script>
+				<div id='qrcode' class='panel' data-load="loadQRImg">
+					<div id="qrcodeimg"></div>
 				</div>
 			</div>
 			<div id='navbar'>
+				<a href='#main' id="map" class='icon location'>Map</a>
+				<a href='#settings' class='icon settings'>Settings</a>
 			</div>
-			<footer id="footer_start">
-				<a href='#' onclick="getUserLocation();" class='icon magnifier'>Find</a>
-				<a href='#' id="start_tracking" onclick="startTracking();" class='icon location'>Track</a>
-				<a href='#' onclick="getQRCode();" class='icon info'>Into</a>
-				<a href='#' onclick="scanQRCode();" class='icon camera'>Scan</a>
-			</footer>
-			<footer id="footer_stop">
-				<a href='#' onclick="getUserLocation();" class='icon magnifier'>Find</a>
-				<a href='#' id="stop_tracking" onclick="stopTracking();" class='icon location'>Stop</a>
-				<a href='#' onclick="getQRCode();" class='icon info'>Into</a>
-				<a href='#' onclick="scanQRCode();" class='icon camera'>Scan</a>
-			</footer>
 		</div>
 	</body>
 </html>
