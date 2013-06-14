@@ -16,6 +16,7 @@
 
 		<script type="text/javascript">
 			var lastGeo = null;
+			var lastUGeo = null;
 
 			/* Prevent users from scrolling the page */
 			var preventDefaultScroll = function(event) {
@@ -39,6 +40,7 @@
 				AppMobi.device.hideSplashScreen();
 				$.ui.launch();
 				$.ui.toggleHeaderMenu();
+				$.ui.updateNavbarElements($('#footer_start').html());
 				initMap();
 				setInterval('getLocation()', 10000); //Get my location every 30 seconds
 				AppMobi.geolocation.getCurrentPosition(gotLocation, noLocation);
@@ -70,28 +72,37 @@
 					myMarker.setPosition(newLL);
 				}
 			}
+
 			function noLocation(){
 			}
 
 			function getUserLocation(){
+				console.log('getUserLocation');
 				var uuid = AppMobi.cache.getCookie('uuid');
 				if (typeof uuid !== 'undefined') {
-					$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + uuid, function(data){
-						var newLL = new google.maps.LatLng(data.lat, data.lng);
-						var mybounds = new google.maps.LatLngBounds();
-						mybounds.extend(newLL);
-						mybounds.extend(myMarker.getPosition());
-						if (uMarker === null) {
-							uMarker = new google.maps.Marker({
-								position: newLL,
-								map: map,
-								title: 'user current location'
-							});
-						} else {
-							uMarker.setPosition(newLL);
-						}
-						map.fitBounds(mybounds);
-					});
+					var d = new Date();
+					var t = d.getTime();
+					if (lastUGeo === null || t - lastUGeo > 30) {
+						lastUGeo = t;
+						console.log('getting it ' + uuid);
+						$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + uuid, function(data){
+							console.log(data);
+							var newLL = new google.maps.LatLng(data.lat, data.lng);
+							var mybounds = new google.maps.LatLngBounds();
+							mybounds.extend(newLL);
+							mybounds.extend(myMarker.getPosition());
+							if (uMarker === null) {
+								uMarker = new google.maps.Marker({
+									position: newLL,
+									map: map,
+									title: 'user current location'
+								});
+							} else {
+								uMarker.setPosition(newLL);
+							}
+							map.fitBounds(mybounds);
+						});
+					}
 				} else {
 					alert('Scan a QR Code first.');
 				}
@@ -122,6 +133,18 @@
 					alert('Saved uuid.');
 				}
 			}
+
+			var uTrackInt = null;
+			function startTracking(){
+				$.ui.updateNavbarElements($('#footer_stop').html());
+				uTrackInt = setInterval('getUserLocation()', 10000);
+			}
+
+			function stopTracking(){
+				$.ui.updateNavbarElements($('#footer_start').html());
+				clearInterval(uTrackInt);
+				uTrackInt = null;
+			}
 		</script>
 	</head>
 	<body>
@@ -144,11 +167,19 @@
 				</div>
 			</div>
 			<div id='navbar'>
+			</div>
+			<footer id="footer_start">
 				<a href='#' onclick="getUserLocation();" class='icon magnifier'>Find</a>
-				<a href='#' class='icon location'>Track</a>
+				<a href='#' id="start_tracking" onclick="startTracking();" class='icon location'>Track</a>
 				<a href='#' onclick="getQRCode();" class='icon info'>Into</a>
 				<a href='#' onclick="scanQRCode();" class='icon camera'>Scan</a>
-			</div>
+			</footer>
+			<footer id="footer_stop">
+				<a href='#' onclick="getUserLocation();" class='icon magnifier'>Find</a>
+				<a href='#' id="stop_tracking" onclick="stopTracking();" class='icon location'>Stop</a>
+				<a href='#' onclick="getQRCode();" class='icon info'>Into</a>
+				<a href='#' onclick="scanQRCode();" class='icon camera'>Scan</a>
+			</footer>
 		</div>
 	</body>
 </html>
