@@ -48,7 +48,7 @@
 			function getLocation(){
 				var d = new Date();
 				var t = d.getTime();
-				if (lastGeo === null || t - lastGeo > 30) {
+				if (lastGeo === null || t - lastGeo > 30) { //@TODO Milliseconds?
 					lastGeo = t;
 					AppMobi.geolocation.getCurrentPosition(gotLocation, noLocation);
 				}
@@ -66,41 +66,15 @@
 						map: map,
 						title: 'my current location'
 					});
+					google.maps.event.addListener(myMarker, 'click', function() {
+						toggleUserTracking();
+					});
 				} else {
 					myMarker.setPosition(newLL);
 				}
 			}
 
 			function noLocation(){
-			}
-
-			function getUserLocation(){
-				var uuid = AppMobi.cache.getCookie('uuid');
-				if (typeof uuid !== 'undefined') {
-					var d = new Date();
-					var t = d.getTime();
-					if (lastUGeo === null || t - lastUGeo > 30) {
-						lastUGeo = t;
-						$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + uuid, function(data){
-							var newLL = new google.maps.LatLng(data.lat, data.lng);
-							var mybounds = new google.maps.LatLngBounds();
-							mybounds.extend(newLL);
-							mybounds.extend(myMarker.getPosition());
-							if (uMarker === null) {
-								uMarker = new google.maps.Marker({
-									position: newLL,
-									map: map,
-									title: 'user current location'
-								});
-							} else {
-								uMarker.setPosition(newLL);
-							}
-							map.fitBounds(mybounds);
-						});
-					}
-				} else {
-					alert('Scan a QR Code first.');
-				}
 			}
 
 			var map;
@@ -131,13 +105,57 @@
 			}
 
 			var uTrackInt = null;
-			function startTracking(){
-				uTrackInt = setInterval('getUserLocation()', 10000);
+			var uTrackTime = null;
+			function toggleUserTracking(forceOn){
+				if (uTrackInt === null && forceOn !== false) {
+					getUserLocation();
+					uTrackInt = setInterval('getUserLocation()', 10000);
+					uTrackTime = setTimeout('toggleUserTracking(false)', 300000); //Auto stop tracking after 5 minutes
+					$('#navbar').css({'background-image':'-webkit-gradient(linear, left top, left bottom, from(#fff), to(rgb(140, 203, 238)))'});
+					AppMobi.notification.vibrate();
+				} else {
+					clearInterval(uTrackInt);
+					uTrackInt = null;
+					clearTimeout(uTrackTime);
+					uTrackTime = null;
+					$('#navbar').css({'background-image':'-webkit-gradient(linear, left top, left bottom, from(#fff), to(#e2edf3))'});
+					AppMobi.notification.vibrate();
+				}
 			}
 
-			function stopTracking(){
-				clearInterval(uTrackInt);
-				uTrackInt = null;
+			function getUserLocation(){
+				var uuid = AppMobi.cache.getCookie('uuid');
+				if (typeof uuid !== 'undefined') {
+					var d = new Date();
+					var t = d.getTime();
+					if (lastUGeo === null || t - lastUGeo > 30) { //@TODO Milliseconds?
+						lastUGeo = t;
+						$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + uuid, function(data){
+							if (typeof data.lat !== 'undefined') {
+								var newLL = new google.maps.LatLng(data.lat, data.lng);
+								var mybounds = new google.maps.LatLngBounds();
+								mybounds.extend(newLL);
+								mybounds.extend(myMarker.getPosition());
+								if (uMarker === null) {
+									uMarker = new google.maps.Marker({
+										position: newLL,
+										map: map,
+										title: 'user current location',
+										icon: "blue-dot.png"
+									});
+								} else {
+									uMarker.setPosition(newLL);
+								}
+								map.fitBounds(mybounds);
+							} else {
+								toggleUserTracking(false);
+								alert('User not found on server.');
+							}
+						});
+					}
+				} else {
+					alert('Scan a QR Code first.');
+				}
 			}
 
 			function hideHeader(){
