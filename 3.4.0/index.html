@@ -40,10 +40,67 @@
 				AppMobi.device.hideSplashScreen();
 				$.ui.launch();
 				initMap();
-				setInterval('getLocation()', 10000); //Get my location every 30 seconds
-				AppMobi.geolocation.getCurrentPosition(gotLocation, noLocation);
+				//@TODO
+				/*
+				- Get location on start.
+				- Then once every 5 minutes.
+				- If significant change (user is moving), update every 30 seconds.
+				- Once location has no significant change for 5 updates (2.5 minutes)
+				switch back to once every 5 minutes.
+				- Allow a push message to force an imediate update and start short cycle.
+				*/
+				meTracking(false);
+				AppMobi.notification.checkPushUser(AppMobi.device.uuid, AppMobi.device.uuid);
 			};
 			document.addEventListener("appMobi.device.ready",onDeviceReady,false);
+
+			var mTrackInt = null;
+			function meTracking(fast){
+				AppMobi.geolocation.getCurrentPosition(gotLocation, noLocation);
+				clearInterval(mTrackInt);
+				if (typeof fast !== 'undefined' && fast === true) {
+					//Fast updates
+					mTrackInt = setInterval('getLocation()', 30000); //Get my location every 30 seconds
+				} else {
+					//Slow updates
+					mTrackInt = setInterval('getLocation()', 300000); //Get my location every 5 minutes
+				}
+			}
+
+			/* This code runs when notifications are registered */
+			var didAdd = false;
+			var notificationsRegistered=function(event) {
+				if(event.success === false) {
+					if (didAdd === false) {
+						didAdd = true;
+						AppMobi.notification.addPushUser(AppMobi.device.uuid, AppMobi.device.uuid, 'no@email.com');
+						return;
+					}
+					return;
+				}
+			}
+			document.addEventListener("appMobi.notification.push.enable",notificationsRegistered,false);
+
+			/* This code runs when a push message is received */
+			var receivedPush = function(){
+				var myNotifications=AppMobi.notification.getNotificationList();
+				var len=myNotifications.length;
+				if(len > 0) {
+					for(i=0; i < len; i++) {
+						msgObj=AppMobi.notification.getNotificationData(myNotifications[i]);
+						try{
+							if(typeof msgObj == "object" && msgObj.id == myNotifications[i]){
+								AppMobi.notification.alert(msgObj.msg + "\n" + msgObj.data + "\n" + msgObj.userkey,"pushMobi Message","OK");
+								AppMobi.notification.deletePushNotifications(msgObj.id);
+								return;
+							}
+						}catch(e){
+							AppMobi.notification.deletePushNotifications(msgObj.id);
+						}
+					}
+				}
+			};
+			document.addEventListener("appMobi.notification.push.receive", receivedPush, false);
 
 			function getLocation(){
 				var d = new Date();
