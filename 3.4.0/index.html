@@ -15,8 +15,9 @@
 		<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
 
 		<script type="text/javascript">
-			var lastGeo = null;
 			var lastUGeo = null;
+			var noSignificantCount = 0;
+			var doingFast = null;
 
 			/* Prevent users from scrolling the page */
 			var preventDefaultScroll = function(event) {
@@ -60,9 +61,11 @@
 				clearInterval(mTrackInt);
 				if (typeof fast !== 'undefined' && fast === true) {
 					//Fast updates
+					doingFast = TRUE;
 					mTrackInt = setInterval('getLocation()', 30000); //Get my location every 30 seconds
 				} else {
 					//Slow updates
+					doingFast = TRUE;
 					mTrackInt = setInterval('getLocation()', 300000); //Get my location every 5 minutes
 				}
 			}
@@ -103,16 +106,25 @@
 			document.addEventListener("appMobi.notification.push.receive", receivedPush, false);
 
 			function getLocation(){
-				var d = new Date();
-				var t = d.getTime();
-				if (lastGeo === null || t - lastGeo > 30) { //@TODO Milliseconds?
-					lastGeo = t;
-					AppMobi.geolocation.getCurrentPosition(gotLocation, noLocation);
-				}
+				AppMobi.geolocation.getCurrentPosition(gotLocation, noLocation);
 			}
 
 			function gotLocation(p){
-				$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + AppMobi.device.uuid + '&lat=' + p.coords.latitude + '&lng=' + p.coords.longitude);
+				$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + AppMobi.device.uuid + '&lat=' + p.coords.latitude + '&lng=' + p.coords.longitude, function(data){
+					if (typeof data.significant !== 'undefined' && data.significant === true) {
+						meTracking(true);
+					} else {
+						if (doingFast) {
+							noSignificantCount++;
+							if (noSignificantCount > 5) {
+								noSignificantCount = 0;
+								meTracking(false);
+							}
+						} else {
+							noSignificantCount = 0;
+						}
+					}
+				});
 				var newLL = new google.maps.LatLng(p.coords.latitude, p.coords.longitude);
 				if (uMarker === null) {
 					map.panTo(newLL);
