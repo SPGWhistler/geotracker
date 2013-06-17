@@ -61,12 +61,14 @@
 				clearInterval(mTrackInt);
 				if (typeof fast !== 'undefined' && fast === true) {
 					//Fast updates
-					doingFast = TRUE;
-					mTrackInt = setInterval('getLocation()', 30000); //Get my location every 30 seconds
+					//TODO Change display to show this
+					doingFast = true;
+					mTrackInt = setInterval('getLocation()', 10000); //Get my location every 30 seconds
 				} else {
 					//Slow updates
-					doingFast = TRUE;
-					mTrackInt = setInterval('getLocation()', 300000); //Get my location every 5 minutes
+					//TODO Change display to show this
+					doingFast = false;
+					mTrackInt = setInterval('getLocation()', 30000); //Get my location every 5 minutes
 				}
 			}
 
@@ -112,7 +114,11 @@
 			function gotLocation(p){
 				$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + AppMobi.device.uuid + '&lat=' + p.coords.latitude + '&lng=' + p.coords.longitude, function(data){
 					if (typeof data.significant !== 'undefined' && data.significant === true) {
-						meTracking(true);
+						if (!doingFast) {
+							//If we aren't doing fast already, switch to it.
+							meTracking(true);
+						}
+						noSignificantCount = 0;
 					} else {
 						if (doingFast) {
 							noSignificantCount++;
@@ -124,6 +130,7 @@
 							noSignificantCount = 0;
 						}
 					}
+					//TODO Put code here to update display of count
 				});
 				var newLL = new google.maps.LatLng(p.coords.latitude, p.coords.longitude);
 				if (uMarker === null) {
