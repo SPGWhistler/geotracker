@@ -11,7 +11,7 @@ if (isset($_GET['uuid'])) {
 		$significant = TRUE;
 		if (isset($obj)) {
 			$dist = distance($_GET['lat'], $_GET['lng'], $obj['lat'], $obj['lng']);
-			$significant = ($dist >= 1) ? TRUE : FALSE;
+			$significant = ($dist >= 0.25) ? TRUE : FALSE;
 		}
 		$collection->update(
 			array('uuid' => $_GET['uuid']),

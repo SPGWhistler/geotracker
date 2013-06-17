@@ -19,6 +19,20 @@
 			var noSignificantCount = 0;
 			var doingFast = null;
 
+			function debug(val) {
+				var d = new Date();
+				var h = d.getHours();
+				h = (h < 10) ? '0' + h : h;
+				var m = d.getMinutes();
+				m = (m < 10) ? '0' + m : m;
+				var s = d.getSeconds();
+				s = (s < 10) ? '0' + s : s;
+				var ms = d.getMilliseconds();
+				ms = (ms < 10) ? '0' + ms : ms;
+				var t = h + ':' + m + ':' + s + ':' + ms;
+				$('#debug_window').append('<span>' + t + ': </span><pre style="display: inline;">' + val + '</pre><br>');
+			};
+
 			/* Prevent users from scrolling the page */
 			var preventDefaultScroll = function(event) {
 			    event.preventDefault();
@@ -41,6 +55,10 @@
 				AppMobi.device.hideSplashScreen();
 				$.ui.launch();
 				initMap();
+				var debug_window = AppMobi.cache.getCookie('debug_window');
+				if (typeof debug_window !== 'undefined' && debug_window === true) {
+					$('#debug_window').show();
+				}
 				//@TODO
 				/*
 				- Get location on start.
@@ -61,12 +79,12 @@
 				clearInterval(mTrackInt);
 				if (typeof fast !== 'undefined' && fast === true) {
 					//Fast updates
-					//TODO Change display to show this
+					debug('fast updates');
 					doingFast = true;
 					mTrackInt = setInterval('getLocation()', 10000); //Get my location every 30 seconds
 				} else {
 					//Slow updates
-					//TODO Change display to show this
+					debug('slow updates');
 					doingFast = false;
 					mTrackInt = setInterval('getLocation()', 30000); //Get my location every 5 minutes
 				}
@@ -130,7 +148,7 @@
 							noSignificantCount = 0;
 						}
 					}
-					//TODO Put code here to update display of count
+					debug('noSignificantCount: ' + noSignificantCount);
 				});
 				var newLL = new google.maps.LatLng(p.coords.latitude, p.coords.longitude);
 				if (uMarker === null) {
@@ -237,6 +255,19 @@
 			function hideHeader(){
 				$.ui.toggleHeaderMenu(false);
 			}
+
+			function toggleDebugWindow(){
+				var debug_window = AppMobi.cache.getCookie('debug_window');
+				if (typeof debug_window !== 'undefined' && debug_window === true) {
+					AppMobi.cache.setCookie('debug_window', false, -1);
+					$.ui.loadContent("#main", false, true);
+					$('#debug_window').hide();
+				} else {
+					AppMobi.cache.setCookie('debug_window', true, -1);
+					$.ui.loadContent("#main", false, true);
+					$('#debug_window').show();
+				}
+			}
 		</script>
 	</head>
 	<body>
@@ -247,6 +278,7 @@
 			<div id="content">
 				<div id='main' class='panel' data-tab="map" data-load="hideHeader" style="width: 100%; height: 100%; overflow: hidden;" selected="true">
 					<div style="width: 100%; height: 100%;" id="map-canvas"></div>
+					<div id="debug_window" style="display: none; overflow: scroll; z-index: 10000; position: absolute; top: 0; left: 0; right: 0; height: 100px; border: 1px solid black; background: #fff;"></div>
 				</div>
 				<div id="settings" class="panel" data-load="hideHeader">
 					<ul>
@@ -255,6 +287,9 @@
 						</li>
 						<li>
 							<a href='#' onclick="scanQRCode()">Scan QR Code</a>
+						</li>
+						<li>
+							<a href='#' onclick="toggleDebugWindow()">Show/Hide Debug Window</a>
 						</li>
 					</ul>
 				</div>
