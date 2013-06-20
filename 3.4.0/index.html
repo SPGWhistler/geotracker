@@ -15,9 +15,9 @@
 		<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
 
 		<script type="text/javascript">
-			var lastUGeo = null;
 			var noSignificantCount = 0;
 			var doingFast = null;
+			var active = null;
 
 			function debug(val) {
 				var d = new Date();
@@ -30,7 +30,7 @@
 				var ms = d.getMilliseconds();
 				ms = (ms < 10) ? '0' + ms : ms;
 				var t = h + ':' + m + ':' + s + ':' + ms;
-				$('#debug_window').append('<span>' + t + ': </span><pre style="display: inline;">' + val + '</pre><br>');
+				$('#debug_window textarea').prepend(t + ': ' + val + "\n");
 			};
 
 			/* Prevent users from scrolling the page */
@@ -56,22 +56,64 @@
 				$.ui.launch();
 				initMap();
 				var debug_window = AppMobi.cache.getCookie('debug_window');
-				if (typeof debug_window !== 'undefined' && debug_window === true) {
+				if (typeof debug_window !== 'undefined' && debug_window === 'true') {
 					$('#debug_window').show();
 				}
+				$('#email_debug_btn').click(function(){
+					AppMobi.notification.confirm("Do you want to send this debug log to the developer?", 'send_debug_info', "Debug Info", "Yes", "No");
+				});
+				active = true;
 				//@TODO
 				/*
-				- Get location on start.
-				- Then once every 5 minutes.
-				- If significant change (user is moving), update every 30 seconds.
-				- Once location has no significant change for 5 updates (2.5 minutes)
-				switch back to once every 5 minutes.
-				- Allow a push message to force an imediate update and start short cycle.
+				- Get location on start
+				- Start in fast tracking mode.
+				- Set a flag indicating we are in active mode.
+				- On backgrounded, stay in fast mode until we have 5 updates with no significant change.
+				- If active or significant change, switch to fast updates.
+				- Allow push to switch to fast updates as well.
 				*/
-				meTracking(false);
+				meTracking(true); //Start fast updates
 				AppMobi.notification.checkPushUser(AppMobi.device.uuid, AppMobi.device.uuid);
 			};
 			document.addEventListener("appMobi.device.ready",onDeviceReady,false);
+
+			/* When the app is backgrounded. */
+			var onDeviceSuspend = function(){
+				active = false;
+				debug('backgrounded');
+			};
+			document.addEventListener("appMobi.device.suspend", onDeviceSuspend, false);
+
+			/* When the app regains focus. */
+			var onDeviceResume = function(){
+				active = true;
+				debug('foregrounded');
+				meTracking(true);
+			};
+			document.addEventListener("appMobi.device.resume", onDeviceResume, false);
+
+			function receiveConfirm(e){
+				if (e.success == true) {
+					switch (e.id) {
+						case 'send_debug_info':
+							if (e.answer === true) {
+								//Do SMS or Email
+								AppMobi.notification.confirm("Do you want to send an Email or an SMS?", 'email_or_sms_debug_info', "Debug Info", "SMS", "EMAIL");
+							}
+							break;
+						case 'email_or_sms_debug_info':
+							if(e.answer === true)  {
+								//Send SMS
+								AppMobi.device.sendSMS('geoTracker debug log: ' + $('#debug_window textarea').val(), '7164898669');
+							} else {
+								//Send Email
+								AppMobi.device.sendEmail($('#debug_window textarea').val(), "tpetty@appmobi.com", "geoTracker Debug Log", false, "", "");
+							}
+							break;
+					}
+				}
+			}
+			document.addEventListener('appMobi.notification.confirm', receiveConfirm, false);
 
 			var mTrackInt = null;
 			function meTracking(fast){
@@ -130,26 +172,43 @@
 			}
 
 			function gotLocation(p){
-				$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + AppMobi.device.uuid + '&lat=' + p.coords.latitude + '&lng=' + p.coords.longitude, function(data){
+				$.getJSON('http://www.anthonypetty.com/geotracker/index.php?uuid=' + AppMobi.device.uuid + '&lat=' + p.coords.latitude + '&lng=' + p.coords.longitude, function(data){
 					if (typeof data.significant !== 'undefined' && data.significant === true) {
+						//Significant change
 						if (!doingFast) {
 							//If we aren't doing fast already, switch to it.
 							meTracking(true);
 						}
+						//Reset no sig count
 						noSignificantCount = 0;
 					} else {
+						//No significant change
 						if (doingFast) {
-							noSignificantCount++;
-							if (noSignificantCount > 5) {
-								noSignificantCount = 0;
-								meTracking(false);
+							//Doing fast updates
+							if (!active) {
+								//We are Not active
+								noSignificantCount++; //Increment no sig count
+								if (noSignificantCount > 5) {
+									//No sig change in 5 updates.
+									noSignificantCount = 0; //Reset no sig count
+									meTracking(false); //Switch to slow updates
+								}
+							} else {
+								//If we ARE active, keep doing fast updates
+								noSignificantCount = 0; //Reset no sig count
 							}
 						} else {
-							noSignificantCount = 0;
+							//Doing slow updates
+							if (active) {
+								//We are Active
+								meTracking(true); //Switch to fast updates
+							}
+							noSignificantCount = 0; //Reset no sig count
 						}
 					}
 					debug('noSignificantCount: ' + noSignificantCount);
 				});
+				debug('got my loc');
 				var newLL = new google.maps.LatLng(p.coords.latitude, p.coords.longitude);
 				if (uMarker === null) {
 					map.panTo(newLL);
@@ -220,33 +279,29 @@
 			function getUserLocation(){
 				var uuid = AppMobi.cache.getCookie('uuid');
 				if (typeof uuid !== 'undefined') {
-					var d = new Date();
-					var t = d.getTime();
-					if (lastUGeo === null || t - lastUGeo > 30) { //@TODO Milliseconds?
-						lastUGeo = t;
-						$.getJSON('http://192.168.11.12/~tpetty/geotracker/index.php?uuid=' + uuid, function(data){
-							if (typeof data.lat !== 'undefined') {
-								var newLL = new google.maps.LatLng(data.lat, data.lng);
-								var mybounds = new google.maps.LatLngBounds();
-								mybounds.extend(newLL);
-								mybounds.extend(myMarker.getPosition());
-								if (uMarker === null) {
-									uMarker = new google.maps.Marker({
-										position: newLL,
-										map: map,
-										title: 'user current location',
-										icon: "blue-dot.png"
-									});
-								} else {
-									uMarker.setPosition(newLL);
-								}
-								map.fitBounds(mybounds);
+					$.getJSON('http://www.anthonypetty.com/geotracker/index.php?uuid=' + uuid, function(data){
+						if (typeof data.lat !== 'undefined') {
+							debug('got user loc');
+							var newLL = new google.maps.LatLng(data.lat, data.lng);
+							var mybounds = new google.maps.LatLngBounds();
+							mybounds.extend(newLL);
+							mybounds.extend(myMarker.getPosition());
+							if (uMarker === null) {
+								uMarker = new google.maps.Marker({
+									position: newLL,
+									map: map,
+									title: 'user current location',
+									icon: "blue-dot.png"
+								});
 							} else {
-								toggleUserTracking(false);
-								alert('User not found on server.');
+								uMarker.setPosition(newLL);
 							}
-						});
-					}
+							map.fitBounds(mybounds);
+						} else {
+							toggleUserTracking(false);
+							alert('User not found on server.');
+						}
+					});
 				} else {
 					alert('Scan a QR Code first.');
 				}
@@ -258,12 +313,12 @@
 
 			function toggleDebugWindow(){
 				var debug_window = AppMobi.cache.getCookie('debug_window');
-				if (typeof debug_window !== 'undefined' && debug_window === true) {
-					AppMobi.cache.setCookie('debug_window', false, -1);
+				if (typeof debug_window !== 'undefined' && debug_window === 'true') {
+					AppMobi.cache.setCookie('debug_window', 'false', -1);
 					$.ui.loadContent("#main", false, true);
 					$('#debug_window').hide();
 				} else {
-					AppMobi.cache.setCookie('debug_window', true, -1);
+					AppMobi.cache.setCookie('debug_window', 'true', -1);
 					$.ui.loadContent("#main", false, true);
 					$('#debug_window').show();
 				}
@@ -278,7 +333,12 @@
 			<div id="content">
 				<div id='main' class='panel' data-tab="map" data-load="hideHeader" style="width: 100%; height: 100%; overflow: hidden;" selected="true">
 					<div style="width: 100%; height: 100%;" id="map-canvas"></div>
-					<div id="debug_window" style="display: none; overflow: scroll; z-index: 10000; position: absolute; top: 0; left: 0; right: 0; height: 100px; border: 1px solid black; background: #fff;"></div>
+					<div id="debug_window" style="display: none; z-index: 10000; position: absolute; top: 0; left: 0; right: 0; height: 250px; border: 1px solid black; background: #fff;">
+						<div style="width: 100%; height: 225px;">
+							<textarea disabled="disabled" style="width: 100%; height: 100%;"></textarea>
+						</div>
+						<button id="email_debug_btn" style="width: 100%; height: 25px;" >Send Debug Info</button>
+					</div>
 				</div>
 				<div id="settings" class="panel" data-load="hideHeader">
 					<ul>
